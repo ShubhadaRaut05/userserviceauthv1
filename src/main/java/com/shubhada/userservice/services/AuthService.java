@@ -13,6 +13,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.MultiValueMap;
 import org.springframework.util.MultiValueMapAdapter;
@@ -24,13 +25,14 @@ import java.util.Optional;
 @Service
 public class AuthService {
 
-    private BCryptPasswordEncoder bCryptPasswordEncoder;
+    private PasswordEncoder passwordEncoder;
     private UserRepository userRepository;
     private SessionRepository sessionRepository;
-    public AuthService(UserRepository userRepository,SessionRepository sessionRepository){
+    public AuthService(UserRepository userRepository, SessionRepository sessionRepository
+    , PasswordEncoder passwordEncoder){
         this.userRepository=userRepository;
         this.sessionRepository=sessionRepository;
-        this.bCryptPasswordEncoder=new BCryptPasswordEncoder();
+        this.passwordEncoder=passwordEncoder;
     }
     public UserDto signUp(String email,String password) throws UserAlreadyExistsException {
         Optional<User> userOptional=userRepository.findByEmail(email);
@@ -40,7 +42,7 @@ public class AuthService {
         }
         User user=new User();
         user.setEmail(email);
-        user.setPassword(bCryptPasswordEncoder.encode(password));
+        user.setPassword(passwordEncoder.encode(password));
         User savedUser=userRepository.save(user);
         return UserDto.from(savedUser);
     }
@@ -52,7 +54,7 @@ public class AuthService {
             throw new UserDoesNotExistException("User with email"+email+"doesn't exist");
         }
         User user=userOptional.get();
-        if(!bCryptPasswordEncoder.matches(password,user.getPassword())){
+        if(!passwordEncoder.matches(password,user.getPassword())){
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         }
         //password has matched
@@ -75,22 +77,27 @@ public class AuthService {
         return response;
     }
 
-    public SessionStatus validate(String token,Long userId){
+    public Optional<UserDto> validate(String token,Long userId){
         Optional<Session> sessionOptional=sessionRepository.findByTokenAndUser_Id(token,userId);
         if(sessionOptional.isEmpty()){
-            return SessionStatus.INVALID;
+            //return SessionStatus.INVALID;
+            return Optional.empty();
         }
         Session session=sessionOptional.get();
         if(!session.getSessionStatus().equals(SessionStatus.ACTIVE))
         {
-            return SessionStatus.EXPIRED;
+            //return SessionStatus.EXPIRED;
+            return Optional.empty();
         }
 
+        User user=userRepository.findById(userId).get();
+        UserDto userDto=UserDto.from(user);
        /* if(!session.getExpiringAt()>new Date()){
             return SessionStatus.EXPIRED;
         }*/
 
-        return SessionStatus.ACTIVE;
+        //return SessionStatus.ACTIVE;
+        return Optional.of(userDto);
 
     }
     public ResponseEntity<Void> logout(String token,Long userId){
